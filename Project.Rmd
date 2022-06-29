@@ -5,10 +5,11 @@ date: '2022-06-29'
 output: pdf_document
 ---
 
-First step is installing haven package to read Sas files
+First step is installing necessary packages 
 ```{r}
 install.packages("haven")
 library("haven")
+library("dplyr")
 ```
 
 Then, next step is to read Sas files using read_sas() function, and putting them into variables
@@ -25,3 +26,18 @@ merged_18 = merge(screen_18, top_18, by.x = "HHIDS", by.y = "HHID", all.x = T, a
 merged_19 = merge(screen_19, top_19, by.x = "HHIDS", by.y = "HHID", all.x = T, all.y = T); merged_19
 ```
 
+Getting the variables we want and turning them into a new variable
+```{r}
+cleanv18 = merged_18 %>% select(HHIDS, C_AGE_YEARS, C_HISPANIC_R, C_RACE_R, C_SEX, BMICLASS, OVERWEIGHT, PHYSACTIV, SCREENTIME, HOURSLEEP, K2Q32A, K2Q32B, K2Q32C, K2Q33A, K2Q33B, K2Q33C, HEART_CURR); cleanv18
+cleanv19 = merged_19 %>% select(HHIDS, C_AGE_YEARS, C_HISPANIC_R, C_RACE_R, C_SEX, BMICLASS, OVERWEIGHT, PHYSACTIV, SCREENTIME, HOURSLEEP, K2Q32A, K2Q32B, K2Q32C, K2Q33A, K2Q33B, K2Q33C, HEART_CURR); cleanv19
+```
+
+Merging clean variable data sets
+```{r}
+cleanvt = merge(cleanv18, cleanv19, all.x = T, all.y = T); cleanvt
+```
+
+Filtering the data set to only include 13-18 year old
+```{r}
+agef = filter(cleanvt, C_AGE_YEARS > 12 & C_AGE_YEARS < 19 & HEART_CURR == '1'); agef
+```
