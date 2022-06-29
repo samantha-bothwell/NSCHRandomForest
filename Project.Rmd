@@ -1,0 +1,27 @@
+---
+title: "Da Project"
+author: "Chard"
+date: '2022-06-29'
+output: pdf_document
+---
+
+First step is installing haven package to read Sas files
+```{r}
+install.packages("haven")
+library("haven")
+```
+
+Then, next step is to read Sas files using read_sas() function, and putting them into variables
+```{r}
+screen_18 = read_sas("/Users/richardlim/Desktop/Cosibs/project/nsch_2018_screener_SAS/nsch_2018_screener.sas7bdat"); screen_18
+top_18 = read_sas("/Users/richardlim/Desktop/Cosibs/project/nsch_2018_topical_SAS/nsch_2018_topical.sas7bdat"); top_18
+screen_19 = read_sas("/Users/richardlim/Desktop/Cosibs/project/nsch_2019_screener_SAS/nsch_2019_screener.sas7bdat"); screen_19
+top_19 = read_sas("/Users/richardlim/Desktop/Cosibs/project/nsch_2019_topical_SAS/nsch_2019_topical.sas7bdat"); top_19
+```
+
+Once the files are read into R, the next step is to combine the 2018 and 2019 data sets respectively 
+```{r}
+merged_18 = merge(screen_18, top_18, by.x = "HHIDS", by.y = "HHID", all.x = T, all.y = T); merged_18
+merged_19 = merge(screen_19, top_19, by.x = "HHIDS", by.y = "HHID", all.x = T, all.y = T); merged_19
+```
+
