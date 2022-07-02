@@ -1,0 +1,160 @@
+#################
+# Random Forest #
+#################
+
+install.packages(urlPackage, repos = NULL, type = "source")
+library(randomForest)
+
+set.seed(2022)
+train <- sample(nrow(st_2018), .8*nrow(st_2018), replace=FALSE)
+TrainSet <- df[train, ]
+TestSet <- df[-train, ]
+summary(TrainSet)
+Summary(TestSet)
+
+
+model1 <- randomForest(BMICLASS ~ Age + Race, data = TrainSet, importance = TRUE)
+model1
+
+############# Sunderlands Work Below; My comments added #############
+
+install.packages(haven)  
+library(haven)
+library(dplyr)
+
+# Uploading data
+screener_2018 <- read_sas("/Users/carlyschwartz/Downloads/CoSIBS 2022 Summer/Project/nsch_2018_screener_SAS/nsch_2018_screener.sas7bdat")
+screener_2019 <- read_sas("/Users/carlyschwartz/Downloads/CoSIBS 2022 Summer/Project/nsch_2019_screener_SAS/nsch_2019_screener.sas7bdat")
+topical_2018 <- read_sas("/Users/carlyschwartz/Downloads/CoSIBS 2022 Summer/Project/nsch_2018_topical_SAS/nsch_2018_topical.sas7bdat")
+topical_2019 <- read_sas("/Users/carlyschwartz/Downloads/CoSIBS 2022 Summer/Project/nsch_2019_topical_SAS/nsch_2019_topical.sas7bdat")
+
+
+# Data variable renaming and merging by ID.
+screener_2018 <- rename(screener_2018, HHID = HHIDS)
+st_2018 <- merge(screener_2018, topical_2018, by="HHID")
+screener_2019 <- rename(screener_2019, HHID = HHIDS)
+st_2019 <- merge(screener_2019, topical_2019, by="HHID")
+st_2018$YEAR <- st_2018$YEAR.x
+st_2019$YEAR <- st_2019$YEAR.x
+st_2018$FIPS <- st_2018$FIPSST.x
+st_2019$FIPS <- st_2019$FIPSST.x
+st_2018_1 <- st_2018 %>% select(YEAR, FIPS, SC_AGE_YEARS, SC_HISPANIC_R, SC_RACE_R, SC_SEX, BMICLASS, OVERWEIGHT,
+                                PHYSACTIV, SCREENTIME, HOURSLEEP, K2Q32A, K2Q32B, K2Q32C, K2Q33A, K2Q33B, K2Q33C,
+                                C_K2Q17,C_K2Q22, TENURE.x, TOTKIDS_R.x, A1_BORN, A1_MARITAL, A1_MENTHEALTH, A1_PHYSHEALTH,
+                                ACE1, ACE7, HCABILITY, BIRTHWT, BREATHING, CAVITIES, DENTALSERV3, FAMILY_R, FPL_I1,
+                                HIGRADE_TVIS, K10Q11, K10Q12, K10Q40_R, K10Q41_R, K11Q62, K2Q40A, K2Q40C, K2Q41A, K2Q41C,
+                                K5Q20_R, K6Q73_R, K7Q30, K7Q38, K8Q31, K9Q41, MAKEFRIEND, METRO_YN.x, S9Q34, SC_K2Q16, SUBABUSE)
+
+st_2019_1 <- st_2019 %>% select(YEAR, FIPS, SC_AGE_YEARS, SC_HISPANIC_R, SC_RACE_R, SC_SEX, BMICLASS, OVERWEIGHT,
+                                PHYSACTIV, SCREENTIME, HOURSLEEP, K2Q32A, K2Q32B, K2Q32C, K2Q33A, K2Q33B, K2Q33C,
+                                C_K2Q17,C_K2Q22, TENURE.x, TOTKIDS_R.x, A1_BORN, A1_MARITAL, A1_MENTHEALTH, A1_PHYSHEALTH,
+                                ACE1, ACE7, HCABILITY, BIRTHWT, BREATHING, CAVITIES, DENTALSERV3, FAMILY_R, FPL_I1, HIGRADE_TVIS,
+                                K10Q11, K10Q12, K10Q40_R, K10Q41_R, K11Q62, K2Q40A, K2Q40C, K2Q41A, K2Q41C, K5Q20_R, K6Q73_R,
+                                K7Q30, K7Q38, K8Q31, K9Q41, MAKEFRIEND, METRO_YN.x, S9Q34, SC_K2Q16, SUBABUSE)
+
+#######################
+#VARIABLE EXPLANATION #
+#######################
+
+# K2Q17 is pediatric disability, FIPSST.x is the FIPS code (geographic info), TENURE is how the household is owned, 
+# TOTKIDS_R is how many kids in house, A1/2_BORN is foreign-born parents, A1/2_MARITAL is parent marital status,
+# A1/2_MENT/PHYSHEALTH is parent mental/physical health, ACE1 is food/housing insecurity,
+# ACE7 is violence experienced [trauma vars], HCABILITY is health affecting ability,
+# BIRTHWT is low/norm birth weight, BREATHING is breathing difficulties, BULLIED_R is getting bullied (freq),
+# CAVITIES is having cavities, DENTALSERV3 is getting dental care on toothbrushing, FAMILY_R is family dynamic,
+# FPL_I1 is family-poverty ratio, HIGRADE_TVIS is the parental level of education,
+# K10Q11 is neighborhood walking paths, K10Q12 is parks/playgrounds, K10Q40_R is neighborhood safety,
+# K10Q41_R is school safety, K11Q62 is FRLP usage in school by children, K2Q40A/C is asthma/its severity,
+#K2Q41A/C is diabetes/its severity, K5Q20_R is healthcare access, K6Q73_R is behavioral resilience,
+# K7Q30 sports involvement, K7Q38 child employment, K8Q31 is parental perceptions of child rearing,
+# K9Q41 is smoking in house, MAKEFRIEND is child's socializability, METRO_YN is living in a metro area,
+# S9Q33 is receiving WIC, SC_K2Q16 is disability impacting tasks, SUBABUSE is child with substance abuse.
+
+
+###################
+
+
+# Next steps: Filter just the ages 13-18 and CVD, and append by year.
+data <- rbind(st_2018_1, st_2019_1)
+DataOfficial <- data %>% filter(data$SC_AGE_YEARS>=13 & data$SC_AGE_YEARS<=18)
+dim(DataOfficial)
+
+# Variable count = 21 (mainly the ones previously-specified as well as home-life and social and emotional variables.) N=675
+st_2018_21 <- st_2018_1 %>% select(FIPS, SC_AGE_YEARS, SC_HISPANIC_R, SC_RACE_R, SC_SEX, BMICLASS, OVERWEIGHT, PHYSACTIV, SCREENTIME, HOURSLEEP, ACE1, ACE7, MAKEFRIEND, SUBABUSE, K2Q32A, K2Q32B, K2Q32C, K2Q33A, K2Q33B, K2Q33C)
+st_2019_21 <- st_2019_1 %>% select(FIPS, SC_AGE_YEARS, SC_HISPANIC_R, SC_RACE_R, SC_SEX, BMICLASS, OVERWEIGHT, PHYSACTIV, SCREENTIME, HOURSLEEP, ACE1, ACE7, MAKEFRIEND, SUBABUSE, K2Q32A, K2Q32B, K2Q32C, K2Q33A, K2Q33B, K2Q33C)
+st_2018_21c <- st_2018_21[complete.cases(st_2018_21),]
+st_2019_21c <- st_2019_21[complete.cases(st_2019_21),]
+st_1819_c <- rbind(st_2018_21c, st_2019_21c) #combined dataset
+st_1819_c <- st_1819_c %>% filter(st_1819_c$SC_AGE_YEARS>=13 & st_1819_c$SC_AGE_YEARS<=18)
+
+##############################
+# Implementing Random Forest #
+##############################
+
+library(randomForest)
+set.seed(2022)
+
+Train <- sample(nrow(st_1819_c), 0.8*nrow(st_1819_c),replace=FALSE)
+TrainSet <- st_1819_c[Train,]
+TestSet <- st_1819_c[-Train,] # whatever is not part of trainset
+summary(TrainSet)
+summary(TestSet)
+
+options(warn=-1)
+
+RF1 <- randomForest(formula = BMICLASS ~ ., data = TrainSet, importance=TRUE)
+RF1 #does not yield confusion matrix
+predTrain <- predict(RF1, TrainSet, type = "class")
+predTest <- predict(RF1, TestSet, type = "class")
+Accuracy_tr <- mean(round(predTrain)==TrainSet$BMICLASS);Accuracy_tr
+Accuracy_te <- mean(round(predTest)==TestSet$BMICLASS);Accuracy_te
+table(round(predTrain),TrainSet$BMICLASS);
+table(round(predTest),TestSet$BMICLASS);
+importance(RF1)
+
+########################
+# ERROR: DF1 NOT FOUND #
+########################
+
+varImpPlot(RF1,sort=TRUE,n.var=min(21, nrow(DF1$importance)),main="Variable Importance Plot for Obesity Predictions with Psychoecological Variables")
+
+#Variable count = 15 (og vars) N=545
+st_2018_15 <- st_2018_1 %>% select(SC_AGE_YEARS, SC_HISPANIC_R, SC_RACE_R, SC_SEX, BMICLASS, OVERWEIGHT, PHYSACTIV, SCREENTIME, HOURSLEEP, K2Q32A, K2Q32B, K2Q32C, K2Q33A, K2Q33B, K2Q33C)
+st_2019_15 <- st_2019_1 %>% select(SC_AGE_YEARS, SC_HISPANIC_R, SC_RACE_R, SC_SEX, BMICLASS, OVERWEIGHT, PHYSACTIV, SCREENTIME, HOURSLEEP, K2Q32A, K2Q32B, K2Q32C, K2Q33A, K2Q33B, K2Q33C)
+st_2018_15c <- st_2018_15[complete.cases(st_2018_15),]
+st_2019_15c <- st_2019_15[complete.cases(st_2019_15),]
+st_1819_15c <- rbind(st_2018_15c, st_2019_15c) #combined dataset
+st_1819_15c <- st_1819_c %>% filter(st_1819_15c$SC_AGE_YEARS>=13 & st_1819_15c$SC_AGE_YEARS<=18)
+
+#Implementing random forest
+library(randomForest)
+set.seed(2022)
+Train <- sample(nrow(st_1819_15c), 0.8*nrow(st_1819_15c),replace=FALSE)
+TrainSet <- st_1819_15c[Train,]
+TestSet <- st_1819_15c[-Train,] #whatever is not part of trainset
+summary(TrainSet)
+summary(TestSet)
+options(warn=-1)
+RF2 <- randomForest(formula = BMICLASS ~ ., data = TrainSet, importance=TRUE)
+RF2 #does not yield confusion matrix
+predTrain <- predict(RF2, TrainSet, type = "class")
+predTest <- predict(RF2, TestSet, type = "class")
+Accuracy_tr <- mean(round(predTrain)==TrainSet$BMICLASS);Accuracy_tr
+Accuracy_te <- mean(round(predTest)==TestSet$BMICLASS);Accuracy_te
+table(round(predTrain),TrainSet$BMICLASS);
+table(round(predTest),TestSet$BMICLASS);
+importance(RF2)
+
+########################
+# ERROR: DF2 NOT FOUND #
+########################
+varImpPlot(RF2,sort=TRUE,n.var=min(15, nrow(DF2$importance)),main="Variable Importance Plot for Obesity Predictions with Psychoecological Variables")
+
+#Variable count = 37. 
+st_2018_1a <- st_2018 %>% select(FIPS, SC_AGE_YEARS, SC_HISPANIC_R, SC_RACE_R, SC_SEX, BMICLASS, OVERWEIGHT, PHYSACTIV, SCREENTIME, HOURSLEEP, K2Q32A, K2Q32B, K2Q32C, K2Q33A, K2Q33B, K2Q33C, C_K2Q22, TENURE.x, TOTKIDS_R.x, A1_MARITAL, A1_MENTHEALTH, A1_PHYSHEALTH, ACE1, ACE7, FPL_I1, HIGRADE_TVIS, K10Q11, K10Q12, K10Q40_R, K10Q41_R, K11Q62, K6Q73_R, K7Q30, MAKEFRIEND, SUBABUSE)
+st_2019_1a <- st_2019 %>% select(FIPS, SC_AGE_YEARS, SC_HISPANIC_R, SC_RACE_R, SC_SEX, BMICLASS, OVERWEIGHT, PHYSACTIV, SCREENTIME, HOURSLEEP, K2Q32A, K2Q32B, K2Q32C, K2Q33A, K2Q33B, K2Q33C, C_K2Q22, TENURE.x, TOTKIDS_R.x, A1_MARITAL, A1_MENTHEALTH, A1_PHYSHEALTH, ACE1, ACE7, FPL_I1, HIGRADE_TVIS, K10Q11, K10Q12, K10Q40_R, K10Q41_R, K11Q62, K6Q73_R, K7Q30, MAKEFRIEND, SUBABUSE)
+comb <- rbind(st_2018_1a,st_2019_1a)
+DataOf <- comb %>% filter(comb$SC_AGE_YEARS>=13 & comb$SC_AGE_YEARS<=18)
+st_1819_37c <- DataOf[complete.cases(DataOf),]
+dim(st_1819_37c)
+# Still need to decrease var count, but I really like this list, since it yields zero entries upon filtering NA values.
