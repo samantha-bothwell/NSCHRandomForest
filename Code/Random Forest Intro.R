@@ -22,14 +22,19 @@ install.packages(haven)
 library(haven)
 library(dplyr)
 
-# Uploading data
+##################
+# UPLOADING DATA #
+##################
+
 screener_2018 <- read_sas("/Users/carlyschwartz/Downloads/CoSIBS 2022 Summer/Project/nsch_2018_screener_SAS/nsch_2018_screener.sas7bdat")
 screener_2019 <- read_sas("/Users/carlyschwartz/Downloads/CoSIBS 2022 Summer/Project/nsch_2019_screener_SAS/nsch_2019_screener.sas7bdat")
 topical_2018 <- read_sas("/Users/carlyschwartz/Downloads/CoSIBS 2022 Summer/Project/nsch_2018_topical_SAS/nsch_2018_topical.sas7bdat")
 topical_2019 <- read_sas("/Users/carlyschwartz/Downloads/CoSIBS 2022 Summer/Project/nsch_2019_topical_SAS/nsch_2019_topical.sas7bdat")
 
+###############################
+# VARIABLE RENAMING + MERGING #
+###############################
 
-# Data variable renaming and merging by ID.
 screener_2018 <- rename(screener_2018, HHID = HHIDS)
 st_2018 <- merge(screener_2018, topical_2018, by="HHID")
 screener_2019 <- rename(screener_2019, HHID = HHIDS)
@@ -71,10 +76,10 @@ st_2019_1 <- st_2019 %>% select(YEAR, FIPS, SC_AGE_YEARS, SC_HISPANIC_R, SC_RACE
 # S9Q33 is receiving WIC, SC_K2Q16 is disability impacting tasks, SUBABUSE is child with substance abuse.
 
 
-###################
+###################################
+# FILTERING BY AGE, CVD, AND YEAR #
+###################################
 
-
-# Next steps: Filter just the ages 13-18 and CVD, and append by year.
 data <- rbind(st_2018_1, st_2019_1)
 DataOfficial <- data %>% filter(data$SC_AGE_YEARS>=13 & data$SC_AGE_YEARS<=18)
 dim(DataOfficial)
@@ -87,9 +92,37 @@ st_2019_21c <- st_2019_21[complete.cases(st_2019_21),]
 st_1819_c <- rbind(st_2018_21c, st_2019_21c) #combined dataset
 st_1819_c <- st_1819_c %>% filter(st_1819_c$SC_AGE_YEARS>=13 & st_1819_c$SC_AGE_YEARS<=18)
 
-##############################
-# Implementing Random Forest #
-##############################
+
+###############
+# FACTORIZING #
+###############
+
+st_1819_c$BMICLASS <- factor(as.integer(st_1819_c$BMICLASS), levels = c(1,2,3,4), labels = c("0-5th perc","5-85th perc", "85-95th perc", "95-100th perc"))
+st_1819_c$FIPS <- factor(as.integer(st_1819_c$FIPS), levels = c(1,2,4,5,6,8,9,10,11,12,13,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,44,45,46,47,48,49,50,51,53,54,55,56), labels = c("Alabama","Alaska","Arizona","Arkansas","California","Colorado","Connecticut","Delaware","District of Columbia","Florida","Georgia","Hawaii","Idaho","Illinois","Indiana","Iowa","Kansas","Kentucky","Louisiana","Maine","Maryland","Massachusetts","Michigan","Minnesota","Mississippi","Missouri","Montana","Nebraska","Nevada","New Hampshire","New Jersey","New Mexico","New York","North Carolina","North Dakota","Ohio","Oklahoma","Oregon","Pennsylvania","Rhode Island","South Carolina","South Dakota","Tennessee","Texas","Utah","Vermont","Virginia","Washington","West Virginia","Wisconsin","Wyoming"))
+st_1819_c$SC_AGE_YEARS <- factor(as.integer(st_1819_c$SC_AGE_YEARS), levels = c(13,14,15,16,17,18))
+st_1819_c$SC_HISPANIC_R <- factor(as.integer(st_1819_c$SC_HISPANIC_R), levels = c(1,2), labels = c("Hispanic/Latino Origin","Not Hispanic/Latino"))
+st_1819_c$SC_RACE_R <- factor(as.integer(st_1819_c$SC_RACE_R), levels = c(1,2,3,4,5,7), labels = c("White","Black or African American","American Indian or Alaska Native","Asian","Native Hawaiian or Pacific Islander","Two or More Races"))
+st_1819_c$SC_SEX <- factor(as.integer(st_1819_c$SC_SEX), levels = c(1,2), labels = c("Male","Female"))
+st_1819_c$OVERWEIGHT <- factor(as.integer(st_1819_c$OVERWEIGHT), levels = c(1,2), labels = c("Yes","No"))
+st_1819_c$PHYSACTIV <- factor(as.integer(st_1819_c$PHYSACTIV), levels = c(1,2,3,4), labels = c("0 days","1-3 days","4-6 days","Every day"))
+st_1819_c$SCREENTIME <- factor(as.integer(st_1819_c$SCREENTIME), levels = c(1,2,3,4,5), labels = c("<1 hour","1 hour","2 hours","3 hours",">4 hours"))
+st_1819_c$HOURSLEEP <- factor(as.integer(st_1819_c$HOURSLEEP), levels = c(1,2,3,4,5,6,7), labels = c("<6 hours","6 hours","7 hours","8 hours","9 hours","10 hours",">11 hours"))
+st_1819_c$ACE1 <- factor(as.integer(st_1819_c$ACE1), levels = c(1,2,3,4), labels = c("Never","Rarely","Somewhat Often","Very Often"))
+st_1819_c$ACE7 <- factor(as.integer(st_1819_c$ACE7), levels = c(1,2), labels = c("Victim of Violence","Not Victim of Violence"))
+st_1819_c$MAKEFRIEND <- factor(as.integer(st_1819_c$MAKEFRIEND), levels = c(1,2,3), labels = c("No difficulty","Some difficulty","A lot of difficulty"))
+st_1819_c$SUBABUSE <- factor(as.integer(st_1819_c$SUBABUSE), levels = c(1,2), labels = c("Substance Use Disorder","No Substance Abuse"))
+st_1819_c$K2Q32A <- factor(as.integer(st_1819_c$K2Q32A), levels = c(1,2), labels = c("Depression","No Depression"))
+st_1819_c$K2Q32B <- factor(as.integer(st_1819_c$K2Q32B), levels = c(1,2), labels = c("Depression Currently","No Depression Currently"))
+st_1819_c$K2Q32C <- factor(as.integer(st_1819_c$K2Q32C), levels = c(1,2,3), labels = c("Mild","Moderate","Severe"))
+st_1819_c$K2Q33A <- factor(as.integer(st_1819_c$K2Q33A), levels = c(1,2), labels = c("Anxiety","No Anxiety"))
+st_1819_c$K2Q33B <- factor(as.integer(st_1819_c$K2Q33B), levels = c(1,2), labels = c("Anxiety Currently","No Anxiety Currently"))
+st_1819_c$K2Q33C <- factor(as.integer(st_1819_c$K2Q33C), levels = c(1,2,3), labels = c("Mild","Moderate","Severe"))
+st_1819_c <- st_1819_c[complete.cases(st_1819_c),]
+
+
+#################
+# RANDOM FOREST #
+#################
 
 library(randomForest)
 set.seed(2022)
@@ -103,20 +136,16 @@ summary(TestSet)
 options(warn=-1)
 
 RF1 <- randomForest(formula = BMICLASS ~ ., data = TrainSet, importance=TRUE)
-RF1 #does not yield confusion matrix
+RF1 # Yields confusion matrix w factorized variables
+
 predTrain <- predict(RF1, TrainSet, type = "class")
 predTest <- predict(RF1, TestSet, type = "class")
-Accuracy_tr <- mean(round(predTrain)==TrainSet$BMICLASS);Accuracy_tr
-Accuracy_te <- mean(round(predTest)==TestSet$BMICLASS);Accuracy_te
+
 table(round(predTrain),TrainSet$BMICLASS);
 table(round(predTest),TestSet$BMICLASS);
 importance(RF1)
 
-########################
-# ERROR: DF1 NOT FOUND #
-########################
-
-varImpPlot(RF1,sort=TRUE,n.var=min(21, nrow(DF1$importance)),main="Variable Importance Plot for Obesity Predictions with Psychoecological Variables")
+varImpPlot(RF1,sort=TRUE,n.var=min(21, nrow(RF1$importance)),main="Variable Importance Plot for Obesity Predictions with Psychoecological Variables")
 
 #Variable count = 15 (og vars) N=545
 st_2018_15 <- st_2018_1 %>% select(SC_AGE_YEARS, SC_HISPANIC_R, SC_RACE_R, SC_SEX, BMICLASS, OVERWEIGHT, PHYSACTIV, SCREENTIME, HOURSLEEP, K2Q32A, K2Q32B, K2Q32C, K2Q33A, K2Q33B, K2Q33C)
@@ -126,7 +155,32 @@ st_2019_15c <- st_2019_15[complete.cases(st_2019_15),]
 st_1819_15c <- rbind(st_2018_15c, st_2019_15c) #combined dataset
 st_1819_15c <- st_1819_c %>% filter(st_1819_15c$SC_AGE_YEARS>=13 & st_1819_15c$SC_AGE_YEARS<=18)
 
-#Implementing random forest
+###############
+# FACTORIZING #
+###############
+
+st_1819_15c$BMICLASS <- factor(as.integer(st_1819_15c$BMICLASS), levels = c(1,2,3,4), labels = c("0-5th perc","5-85th perc", "85-95th perc", "95-100th perc"))
+st_1819_15c$FIPS <- factor(as.integer(st_1819_15c$FIPS), levels = c(1,2,4,5,6,8,9,10,11,12,13,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,44,45,46,47,48,49,50,51,53,54,55,56), labels = c("Alabama","Alaska","Arizona","Arkansas","California","Colorado","Connecticut","Delaware","District of Columbia","Florida","Georgia","Hawaii","Idaho","Illinois","Indiana","Iowa","Kansas","Kentucky","Louisiana","Maine","Maryland","Massachusetts","Michigan","Minnesota","Mississippi","Missouri","Montana","Nebraska","Nevada","New Hampshire","New Jersey","New Mexico","New York","North Carolina","North Dakota","Ohio","Oklahoma","Oregon","Pennsylvania","Rhode Island","South Carolina","South Dakota","Tennessee","Texas","Utah","Vermont","Virginia","Washington","West Virginia","Wisconsin","Wyoming"))
+st_1819_15c$SC_AGE_YEARS <- factor(as.integer(st_1819_15c$SC_AGE_YEARS), levels = c(13,14,15,16,17,18))
+st_1819_15c$SC_HISPANIC_R <- factor(as.integer(st_1819_15c$SC_HISPANIC_R), levels = c(1,2), labels = c("Hispanic/Latino Origin","Not Hispanic/Latino"))
+st_1819_15c$SC_RACE_R <- factor(as.integer(st_1819_15c$SC_RACE_R), levels = c(1,2,3,4,5,7), labels = c("White","Black or African American","American Indian or Alaska Native","Asian","Native Hawaiian or Pacific Islander","Two or More Races"))
+st_1819_15c$SC_SEX <- factor(as.integer(st_1819_15c$SC_SEX), levels = c(1,2), labels = c("Male","Female"))
+st_1819_15c$OVERWEIGHT <- factor(as.integer(st_1819_15c$OVERWEIGHT), levels = c(1,2), labels = c("Yes","No"))
+st_1819_15c$PHYSACTIV <- factor(as.integer(st_1819_15c$PHYSACTIV), levels = c(1,2,3,4), labels = c("0 days","1-3 days","4-6 days","Every day"))
+st_1819_15c$SCREENTIME <- factor(as.integer(st_1819_15c$SCREENTIME), levels = c(1,2,3,4,5), labels = c("<1 hour","1 hour","2 hours","3 hours",">4 hours"))
+st_1819_15c$HOURSLEEP <- factor(as.integer(st_1819_15c$HOURSLEEP), levels = c(1,2,3,4,5,6,7), labels = c("<6 hours","6 hours","7 hours","8 hours","9 hours","10 hours",">11 hours"))
+st_1819_15c$K2Q32A <- factor(as.integer(st_1819_15c$K2Q32A), levels = c(1,2), labels = c("Depression","No Depression"))
+st_1819_15c$K2Q32B <- factor(as.integer(st_1819_15c$K2Q32B), levels = c(1,2), labels = c("Depression Currently","No Depression Currently"))
+st_1819_15c$K2Q32C <- factor(as.integer(st_1819_15c$K2Q32C), levels = c(1,2,3), labels = c("Mild","Moderate","Severe"))
+st_1819_15c$K2Q33A <- factor(as.integer(st_1819_15c$K2Q33A), levels = c(1,2), labels = c("Anxiety","No Anxiety"))
+st_1819_15c$K2Q33B <- factor(as.integer(st_1819_15c$K2Q33B), levels = c(1,2), labels = c("Anxiety Currently","No Anxiety Currently"))
+st_1819_15c$K2Q33C <- factor(as.integer(st_1819_15c$K2Q33C), levels = c(1,2,3), labels = c("Mild","Moderate","Severe"))
+st_1819_15c <- st_1819_15c[complete.cases(st_1819_15c),]
+
+#################
+# RANDOM FOREST #
+#################
+
 library(randomForest)
 set.seed(2022)
 Train <- sample(nrow(st_1819_15c), 0.8*nrow(st_1819_15c),replace=FALSE)
@@ -145,16 +199,14 @@ table(round(predTrain),TrainSet$BMICLASS);
 table(round(predTest),TestSet$BMICLASS);
 importance(RF2)
 
-########################
-# ERROR: DF2 NOT FOUND #
-########################
-varImpPlot(RF2,sort=TRUE,n.var=min(15, nrow(DF2$importance)),main="Variable Importance Plot for Obesity Predictions with Psychoecological Variables")
+varImpPlot(RF2,sort=TRUE,n.var=min(15, nrow(RF2$importance)),main="Variable Importance Plot for Obesity Predictions with Psychoecological Variables")
 
-#Variable count = 37. 
+# Variable count = 37. 
 st_2018_1a <- st_2018 %>% select(FIPS, SC_AGE_YEARS, SC_HISPANIC_R, SC_RACE_R, SC_SEX, BMICLASS, OVERWEIGHT, PHYSACTIV, SCREENTIME, HOURSLEEP, K2Q32A, K2Q32B, K2Q32C, K2Q33A, K2Q33B, K2Q33C, C_K2Q22, TENURE.x, TOTKIDS_R.x, A1_MARITAL, A1_MENTHEALTH, A1_PHYSHEALTH, ACE1, ACE7, FPL_I1, HIGRADE_TVIS, K10Q11, K10Q12, K10Q40_R, K10Q41_R, K11Q62, K6Q73_R, K7Q30, MAKEFRIEND, SUBABUSE)
 st_2019_1a <- st_2019 %>% select(FIPS, SC_AGE_YEARS, SC_HISPANIC_R, SC_RACE_R, SC_SEX, BMICLASS, OVERWEIGHT, PHYSACTIV, SCREENTIME, HOURSLEEP, K2Q32A, K2Q32B, K2Q32C, K2Q33A, K2Q33B, K2Q33C, C_K2Q22, TENURE.x, TOTKIDS_R.x, A1_MARITAL, A1_MENTHEALTH, A1_PHYSHEALTH, ACE1, ACE7, FPL_I1, HIGRADE_TVIS, K10Q11, K10Q12, K10Q40_R, K10Q41_R, K11Q62, K6Q73_R, K7Q30, MAKEFRIEND, SUBABUSE)
 comb <- rbind(st_2018_1a,st_2019_1a)
 DataOf <- comb %>% filter(comb$SC_AGE_YEARS>=13 & comb$SC_AGE_YEARS<=18)
 st_1819_37c <- DataOf[complete.cases(DataOf),]
 dim(st_1819_37c)
+
 # Still need to decrease var count, but I really like this list, since it yields zero entries upon filtering NA values.
