@@ -1,0 +1,147 @@
+---
+title: "CoSIBSProject"
+author: "Hunter Sherwood"
+date: "6/28/2022"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(readr)
+library(dplyr)
+
+urlfile="https://raw.githubusercontent.com/sjbothwell/NSCHRandomForest/main/Data/NSCHRandomForest-clean-070522.csv"
+
+dataofficial <- read_csv(url(urlfile)) ## years are all 2018?
+
+na_free_df = dataofficial[complete.cases(dataofficial), ]
+
+na_free_df = na_free_df[-7] # dropping BMICLASS
+
+
+```
+
+
+```{r}
+## transforming categorical variables with factor
+na_free_df$BMICLASS2 <- factor(as.integer(na_free_df$BMICLASS2), levels = c(1,2,3),
+                               labels = c("0-85th perc", "85-95th perc", "95-100th perc"))
+na_free_df$SC_AGE_YEARS <- factor(as.integer(na_free_df$SC_AGE_YEARS), levels = c(13,14,15,16,17,18))
+na_free_df$SC_HISPANIC_R <- factor(as.integer(na_free_df$SC_HISPANIC_R), levels = c(1,2), 
+                                    labels = c("Hispanic/Latino Origin","Not Hispanic/Latino"))
+na_free_df$SC_RACE_R <- factor(as.integer(na_free_df$SC_RACE_R), levels = c(1,2,3,4,5,6,7), 
+                                labels = c("White","Black or African American",
+                                           "American Indian or Alaska Native","Asian",
+                                           "Native Hawaiian or Pacific Islander","Some other race alone", 
+                                           "Two or More Races"))
+na_free_df$SC_SEX <- factor(as.integer(na_free_df$SC_SEX), levels = c(1,2), labels = c("Male","Female"))
+na_free_df$OVERWEIGHT <- factor(as.integer(na_free_df$OVERWEIGHT), levels = c(1,2), 
+                                 labels = c("Yes","No"))
+na_free_df$PHYSACTIV <- factor(as.integer(na_free_df$PHYSACTIV), levels = c(1,2,3,4), 
+                                labels = c("0 days","1-3 days","4-6 days","Every day"))
+na_free_df$SCREENTIME <- factor(as.integer(na_free_df$SCREENTIME), levels = c(1,2,3,4,5), 
+                                 labels = c("<1 hour","1 hour","2 hours","3 hours",">4 hours"))
+na_free_df$HOURSLEEP <- factor(as.integer(na_free_df$HOURSLEEP), levels = c(1,2,3,4,5,6,7), 
+                                labels = c("<6 hours","6 hours","7 hours","8 hours","9 hours",
+                                           "10 hours",">11 hours"))
+na_free_df$K2Q32A <- factor(as.integer(na_free_df$K2Q32A), levels = c(1,2), 
+                             labels = c("Depression","No Depression"))
+na_free_df$K2Q32B <- factor(as.integer(na_free_df$K2Q32B), levels = c(1,2), 
+                             labels = c("Depression Currently","No Depression Currently"))
+na_free_df$K2Q32C <- factor(as.integer(na_free_df$K2Q32C), levels = c(1,2,3), 
+                             labels = c("Mild","Moderate","Severe"))
+na_free_df$K2Q33A <- factor(as.integer(na_free_df$K2Q33A), levels = c(1,2), 
+                             labels = c("Anxiety","No Anxiety"))
+na_free_df$K2Q33B <- factor(as.integer(na_free_df$K2Q33B), levels = c(1,2), 
+                             labels = c("Anxiety Currently","No Anxiety Currently"))
+na_free_df$K2Q33C <- factor(as.integer(na_free_df$K2Q33C), 
+                             levels = c(1,2,3), labels = c("Mild","Moderate","Severe"))
+na_free_df$ACE1 <- factor(as.integer(na_free_df$ACE1), 
+                             levels = c(1,2,3,4), 
+                             labels = c("Never","Rarely","Somewhat often","Very often"))
+na_free_df$ACE10 <- factor(as.integer(na_free_df$ACE10),
+                             levels = c(1,2), 
+                             labels = c("Yes","No"))
+na_free_df$ACE3 <- factor(as.integer(na_free_df$ACE3),
+                             levels = c(1,2), 
+                             labels = c("Yes","No"))
+na_free_df$ACE4 <- factor(as.integer(na_free_df$ACE4),
+                             levels = c(1,2), 
+                             labels = c("Yes","No"))
+na_free_df$ACE5 <- factor(as.integer(na_free_df$ACE5),
+                             levels = c(1,2), 
+                             labels = c("Yes","No"))
+na_free_df$ACE6 <- factor(as.integer(na_free_df$ACE6),
+                             levels = c(1,2), 
+                             labels = c("Yes","No"))
+na_free_df$ACE7 <- factor(as.integer(na_free_df$ACE7),
+                             levels = c(1,2), 
+                             labels = c("Yes","No"))
+na_free_df$ACE8 <- factor(as.integer(na_free_df$ACE8),
+                             levels = c(1,2), 
+                             labels = c("Yes","No"))
+na_free_df$ACE9 <- factor(as.integer(na_free_df$ACE9),
+                             levels = c(1,2), 
+                             labels = c("Yes","No"))
+
+
+
+# na_free_df2 = na_free_df[complete.cases(na_free_df), ] 
+## lost 24 rows of data out of 1332 rows
+## had more NA's after reclassifying so cleaned them
+# turns out I forgot to add level 6 for 'some other race alone'
+
+ACE_only_df = na_free_df[17:26] ## ACE only data frame to run random forest on
+```
+
+
+```{r}
+#Implementing random forest on entire data frame
+library(randomForest)
+set.seed(2022)
+Train <- sample(nrow(na_free_df), 0.8*nrow(na_free_df),replace=FALSE)
+TrainSet <- na_free_df[Train,]
+TestSet <- na_free_df[-Train,] #whatever is not part of trainset
+summary(TrainSet)
+summary(TestSet)
+
+RF1 <- randomForest(formula = BMICLASS2 ~ ., data = TrainSet, importance=TRUE)
+RF1 #yields a confusion matrix with variables factorized
+predTrain <- predict(RF1, TrainSet, type = "class")
+predTest <- predict(RF1, TestSet, type = "class")
+
+table(predTrain,TrainSet$BMICLASS2);
+table(predTest,TestSet$BMICLASS2);
+importance(RF1)
+varImpPlot(RF1,sort=TRUE,n.var=min(21, nrow(RF1$importance)),main="Variable Importance Plot for Obesity Predictions with Psychoecological Variables")
+
+
+```
+
+
+```{r}
+set.seed(2022)
+Train <- sample(nrow(ACE_only_df), 0.8*nrow(ACE_only_df),replace=FALSE)
+TrainSet <- ACE_only_df[Train,]
+TestSet <- ACE_only_df[-Train,] #whatever is not part of trainset
+summary(TrainSet)
+summary(TestSet)
+
+RF1 <- randomForest(formula = BMICLASS2 ~ ., data = TrainSet, importance=TRUE)
+RF1 #yields a confusion matrix with variables factorized
+predTrain <- predict(RF1, TrainSet, type = "class")
+predTest <- predict(RF1, TestSet, type = "class")
+
+table(predTrain,TrainSet$BMICLASS2);
+table(predTest,TestSet$BMICLASS2);
+importance(RF1)
+varImpPlot(RF1,sort=TRUE,n.var=min(21, nrow(RF1$importance)),main="Variable Importance Plot for Obesity Predictions with Psychoecological Variables")
+## ACE1 seems to be the most important
+```
+
