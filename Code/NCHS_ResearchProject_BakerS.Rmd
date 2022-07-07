@@ -45,7 +45,9 @@ DO_1$HOURSLEEP <- factor(as.integer(DO_1$HOURSLEEP), levels = c(1,2,3,4,5,6,7), 
 DO_1$K2Q32A <- factor(as.integer(DO_1$K2Q32A), levels = c(1,2), labels = c("Depression","No Depression"))
 DO_1$K2Q33A <- factor(as.integer(DO_1$K2Q33A), levels = c(1,2), labels = c("Anxiety","No Anxiety"))
 newvar <- c()
-for (k in 1:19684){
+
+# Counting the number of ACEs 
+for (k in 1:length(DO_1$SC_AGE_YEARS){
   val <- 0
   if (DO_1$ACE1[k]==3 | DO_1$ACE1[k]==4){
     val <- val + 1}
