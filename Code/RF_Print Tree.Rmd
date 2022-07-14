@@ -241,6 +241,7 @@ reprtree:::plot.getTree(DO1b_RF5, depth = 5)
 
 ```{r}
 # Print random forest tree 
+# Doesn't run for me
 tree = rpart(formula = BMICLASS2 ~ ., TrainSet_2)
  fancyRpartPlot(tree, palettes=c("Reds"), main="Decision Tree Graph", sub="",
                yesno = 2) # , node.fun = nodefun)
