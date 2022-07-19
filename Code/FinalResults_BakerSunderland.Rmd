@@ -1,0 +1,368 @@
+---
+title: "FinalResults_BakerSunderland"
+author: "Sunderland Baker"
+date: '2022-07-16'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## I: Uploading files
+``` {r, message=FALSE, warning=FALSE, echo=TRUE}
+#Fix recategorization problems per the updated GitHub code. Get rid of OVERWEIGHT from RF models. Mess around with data and vars to minimize error rate (OOB). Read into BMI correlates.
+library(haven)
+library(dplyr)
+library(tidyverse)
+library(party)
+library(rpart)
+library(rpart.plot)
+library(ggplot2)
+library(randomForest)
+#Uploading data from OneDrive repository.
+screener_2018 <- read_sas("C:/Users/Sunderland Baker/OneDrive - Colorado College/JUNIOR YEAR/BIOS6670/NCHS Research Project/nsch_2018_screener.sas7bdat")
+topical_2018 <- read_sas("C:/Users/Sunderland Baker/OneDrive - Colorado College/JUNIOR YEAR/BIOS6670/NCHS Research Project/nsch_2018_topical.sas7bdat")
+screener_2019 <- read_sas("C:/Users/Sunderland Baker/OneDrive - Colorado College/JUNIOR YEAR/BIOS6670/NCHS Research Project/nsch_2019_screener.sas7bdat")
+topical_2019 <- read_sas("C:/Users/Sunderland Baker/OneDrive - Colorado College/JUNIOR YEAR/BIOS6670/NCHS Research Project/nsch_2019_topical.sas7bdat")
+```
+
+## II: Selecting variables of interest
+``` {r message=FALSE, warning=FALSE, echo=FALSE}
+t_2018 <- topical_2018 %>% 
+  select(YEAR, FIPSST, SC_AGE_YEARS, SC_HISPANIC_R, SC_RACE_R, SC_SEX, BMICLASS, PHYSACTIV, SCREENTIME, 
+         HOURSLEEP, K2Q32A, K2Q33A, ACE1, ACE3, ACE4, ACE5, ACE6, ACE7, ACE8, ACE9, ACE10, A1_BORN, 
+         A1_PHYSHEALTH, BIRTHWT, BULLIED_R, CURRCOV, FAMILY_R, FPL_I1, HCABILITY, HIGRADE_TVIS, K10Q11, 
+         K10Q12, K10Q22, K10Q40_R, K11Q61, K2Q41A, K4Q27, K7Q30, K8Q31, METRO_YN, SC_K2Q16, TEMPER)
+t_2019 <- topical_2019 %>% 
+  select(YEAR, FIPSST, SC_AGE_YEARS, SC_HISPANIC_R, SC_RACE_R, SC_SEX, BMICLASS, PHYSACTIV, SCREENTIME, 
+         HOURSLEEP, K2Q32A, K2Q33A, ACE1, ACE3, ACE4, ACE5, ACE6, ACE7, ACE8, ACE9, ACE10, A1_BORN, 
+         A1_PHYSHEALTH, BIRTHWT, BULLIED_R, CURRCOV, FAMILY_R, FPL_I1, HCABILITY, HIGRADE_TVIS, K10Q11, 
+         K10Q12, K10Q22, K10Q40_R, K11Q61, K2Q41A, K4Q27, K7Q30, K8Q31, METRO_YN, SC_K2Q16, TEMPER)
+#Notes on variables: K2Q32A is depression in children, K2Q33A is anxiety in children, ACE1 is food insecurity, ACE3 is parent divorce, ACE4 is parent death, ACE5 is parent incarceration, ACE6 is parental violence, ACE7 is victim of violence, ACE8 is exposure to mental illness, ACE9 is exposure to drugs/alcohol abuse, ACE10 is racial discrimination. A1BORN is parental birthplace, A1GRADE is parental education level (associated with nutrition), A1_PHYSHEALTH is parental physical health associated with caretaking, BIRTHWT is child birth weight, BULLIED_R is child being bullied in past 12 mos, CURRCOV is current healthcare coverage of any kind, FAMILY_R is family structure, FPL_I1 in family-poverty ratio, HCABILITY is health affecting ability, HIGRADE_TVIS is parental education level, K10Q11 is neighborhood walkability, K10Q12 neighborhood playground, K10Q22 is rundown housing, K10Q40_R is neighborhood safety, K11Q61 is using SNAP/WIC benefits, K2Q41A is diabetes diagnosis, K4Q27 is needed healthcare not received, K6Q73_R is behavioral resilience, K7Q30 is sports involvement, K8Q31 is perceptions on child rearing, METRO_YN is living in a metropolitan area, SC_K2Q16 is limited ability in child (delete either this or HCABILITY and check n), TEMPER is behavioral temperament of child.
+
+#Combine data
+data <- rbind(t_2018, t_2018)
+```
+
+## III: Reclassifying variables
+``` {r, message=FALSE, warning=FALSE, echo=TRUE}
+# Filter data to only include ages 13 - 18 
+DO_1b <- data %>% filter(data$SC_AGE_YEARS>=13 & data$SC_AGE_YEARS<=18)
+
+# Recategorize factor variables
+DO_1b$FIPSST <- factor(as.integer(DO_1b$FIPSST), 
+                                    levels =c(1,2,4,5,6,8:13,15:42,44:51,53:56), 
+                       labels = c("AL","AK","AZ","AR","CA","CO","CT",
+                                  "DE","DC", "FL", "GA","HI","ID","IL",
+                                  "IN","IA","KS","KY","LA","ME","MD","MA",
+                                  "MI","MN","MS","MO","MT","NE","NV","NH",
+                                  "NJ","NM","NY","NC","ND","OH","OK","OR",
+                                  "PA","RI","SC","SD","TN","TX","UT","VT",
+                                  "VA","WA","WV","WI","WY"))
+DO_1b$SC_HISPANIC_R <-  factor(as.integer(DO_1b$SC_HISPANIC_R), levels = c(1,2), 
+                                           labels = c("Hispanic/Latino Origin","Not Hispanic/Latino"))
+DO_1b$SC_RACE_R <-  factor(as.integer(DO_1b$SC_RACE_R), levels = c(1,2,3,4,5,6,7), 
+                                       labels = c("White","Black or African American","American Indian or Alaska Native",
+                                                  "Asian","Native Hawaiian or Pacific Islander","Other Race","Two or More Races"))
+DO_1b$SC_SEX <-  factor(as.character(DO_1b$SC_SEX), levels = c(1,2), labels = c("Male","Female"))
+DO_1b$PHYSACTIV <-  factor(as.integer(DO_1b$PHYSACTIV), levels = c(1,2,3,4), 
+                                       labels = c("0 days","1-3 days","4-6 days","Every day"))
+DO_1b$SCREENTIME <-  factor(as.integer(DO_1b$SCREENTIME), levels = c(1,2,3,4,5), 
+                                        labels = c("<1 hour","1 hour","2 hours","3 hours",">4 hours"))
+DO_1b$HOURSLEEP <-  factor(as.integer(DO_1b$HOURSLEEP), levels = c(1,2,3,4,5,6,7), 
+                                       labels = c("<6 hours","6 hours","7 hours","8 hours","9 hours","10 hours",">11 hours"))
+DO_1b$K2Q32A <-  factor(as.integer(DO_1b$K2Q32A), levels = c(1,2), labels = c("Depression","No Depression"))
+DO_1b$K2Q33A <-  factor(as.integer(DO_1b$K2Q33A), levels = c(1,2), labels = c("Anxiety","No Anxiety"))
+DO_1b$A1_BORN <-  factor(as.integer(DO_1b$A1_BORN), levels = c(1,2), labels = c("In the U.S.", "Outside the U.S."))
+DO_1b$A1_PHYSHEALTH <-  factor(as.integer(DO_1b$A1_PHYSHEALTH), levels = c(1,2,3,4,5), 
+                                           labels = c("Excellent","Very Good","Good","Fair","Poor"))
+DO_1b$BIRTHWT <-  factor(as.integer(DO_1b$BIRTHWT), levels = c(1,2,3), 
+                                     labels = c("Very Low Birth Weight","Low Birth Weight","Not Low Birth Weight"))
+DO_1b$BULLIED_R <-  factor(as.integer(DO_1b$BULLIED_R), levels = c(1,2,3,4,5), 
+                                       labels = c("Never","1-2 times/12 mos","1-2/mo","1-2 times/wk","Almost every day"))
+DO_1b$CURRCOV <-  factor(as.integer(DO_1b$CURRCOV), levels = c(1,2), labels = c("Yes","No"))
+DO_1b$FAMILY_R <-  factor(as.character(DO_1b$FAMILY_R), levels = c(1,2,3,4,5,6,7,8), 
+                                      labels = c("Two biological/adoptive parents, married",
+                                                 "Two biological/adoptive parents, not married",
+                                                 "Two parents, one biological, married",
+                                                 "Two parents, one biological, no married",
+                                                 "Single mother","Single father",
+                                                 "Grandparent household","Other relation"))
+DO_1b$FPL_I1 <- as.factor(ifelse(DO_1b$FPL_I1 < 100, "<100%", ifelse(DO_1b$FPL_I1 < 200, "100-199%", 
+                ifelse(DO_1b$FPL_I1 < 300, "200-299%", ifelse(DO_1b$FPL_I1 < 400, "300-399%", ">400")))))
+DO_1b$HIGRADE_TVIS <-  factor(as.integer(DO_1b$HIGRADE_TVIS), levels = c(1,2,3,4), 
+                                          labels = c("Less than high school","High school",
+                                                     "Some college or Associate degree","College degree or higher"))
+DO_1b$K10Q11 <-  factor(as.integer(DO_1b$K10Q11), levels = c(1,2), 
+                                    labels = c("Sidewalks and walking paths","No sidewalks and walking paths"))
+DO_1b$K10Q12 <-  factor(as.integer(DO_1b$K10Q12), levels = c(1,2), 
+                                    labels = c("Park or playground","No park or playground"))
+DO_1b$K10Q22 <-  factor(as.integer(DO_1b$K10Q12), levels = c(1,2), 
+                                    labels = c("Rundown housing","No rundown housing"))
+DO_1b$K10Q40_R <-  factor(as.integer(DO_1b$K10Q40_R), levels = c(1,2,3,4), 
+                                      labels = c("Definitely agree","Somewhat agree","Somewhat disagree","Definitely disagree"))
+DO_1b$K11Q61 <-  factor(as.integer(DO_1b$K11Q61), levels = c(1,2), 
+                                    labels = c("SNAP/WIC Use","No SNAP/WIC Use"))
+DO_1b$K2Q41A <-  factor(as.integer(DO_1b$K2Q41A), levels = c(1,2), 
+                                    labels = c("Diabetes Diagnosis","No Diabetes Diagnosis"))
+DO_1b$K4Q27 <-  factor(as.integer(DO_1b$K4Q27), levels = c(1,2), 
+                                   labels = c("Needed Healthcare Not Received","Healthcare Always Received"))
+DO_1b$K7Q30 <-  factor(as.integer(DO_1b$K7Q30), levels = c(1,2), labels = c("Sports Involvement","No Sports Involvement"))
+DO_1b$K8Q31 <-  factor(as.integer(DO_1b$K8Q31), levels = c(1,2,3,4,5), 
+                                   labels = c("No difficulty","Rare difficulty","Some difficulty","Often difficult","Always difficult"))
+DO_1b$METRO_YN <-  factor(as.integer(DO_1b$METRO_YN), levels = c(1,2), 
+                                      labels = c("Live in Metro Area", "Do NOT Live in Metro Area"))
+DO_1b$SC_K2Q16 <-  factor(as.integer(DO_1b$SC_K2Q16), levels = c(1,2), 
+                                      labels = c("Limited Mobility","No Mobility Limitations"))
+DO_1b$TEMPER <-  factor(as.integer(DO_1b$TEMPER), levels = c(1,2,3,4,5), 
+                                    labels = c("Always Loses Temper","Mostly Loses Temper","Half-Times Loses Temper",
+                                               "Sometimes Loses Temper","Never Loses Temper"))
+
+
+# Combine BMI class 1 and 2 
+DO_1b$BMICLASS2 <- ifelse(DO_1b$BMICLASS %in% c(1,2), 1, ifelse(
+  DO_1b$BMICLASS==3, 2, 3))
+DO_1b$BMICLASS2 <- factor(as.integer(DO_1b$BMICLASS2), levels = c(1,2,3), labels = c("<85th perc","85-95th perc", ">95th perc"))
+
+# Calculate the number of ACEs 
+## Redefine ACE1
+#DO_1b$ACE1_temp <- ifelse(DO_1b$ACE1 %in% c(3,4), 1, 0)
+#DO_1b$ACE_Count <- rowSums(DO_1b[,c("ACE1_temp", paste0("ACE", c(3:10)))], na.rm = T)
+
+
+#Recategorizing ace variables after ACE_Count
+DO_1b$ACE1 <-  factor(as.integer(DO_1b$ACE1), levels = c(1,2,3,4), 
+                                  labels = c("No Food Insecurity", "Rare Food Insecurity", 
+                                             "Often Food Insecurity", "Very Often Food Insecurity"))
+DO_1b$ACE3 <-  factor(as.integer(DO_1b$ACE3), levels = c(1,2), 
+                                  labels = c("Parents Divorced/Separated", "Parents Together"))
+DO_1b$ACE4 <-  factor(as.integer(DO_1b$ACE4), levels = c(1,2), labels = c("Parent Death", "No Parent Death"))
+DO_1b$ACE5 <-  factor(as.integer(DO_1b$ACE5), levels = c(1,2), 
+                                  labels = c("Parent Incarcerated", "Parent Not Incarcerated"))
+DO_1b$ACE6 <-  factor(as.integer(DO_1b$ACE6), levels = c(1,2), 
+                                  labels = c("Witnessed Domestic Violence", "No Domestic Violence"))
+DO_1b$ACE7 <-  factor(as.integer(DO_1b$ACE7), levels = c(1,2), 
+                                  labels = c("Victim of Violence", "Not Victim of Violence"))
+DO_1b$ACE8 <-  factor(as.integer(DO_1b$ACE8), levels = c(1,2), 
+                                  labels = c("Lived with Mentally Ill", "No Exposure to Mental Illness"))
+DO_1b$ACE9 <-  factor(as.integer(DO_1b$ACE9), levels = c(1,2), 
+                                  labels = c("Lived with Alcohol/Drug Abuse", "No Exposure to Alcohol/Drug Abuse"))
+DO_1b$ACE10 <-  factor(as.integer(DO_1b$ACE10), levels = c(1,2), 
+                                   labels = c("Racism Experienced", "No Racism Experienced"))
+```
+
+## IV: Random Forest Model w/ State with insightful plots produced.
+``` {r, message=FALSE, warning=FALSE, echo=TRUE}
+#RANDOM FOREST MODEL 1, NTREE=500, MTRY=5, REDUCED VAR COUNT (any Decrease Acc <40%): 
+#removed K2Q41A (diabetes), K11Q61A (food stamp usage), ACE5 (parent incarceration), 
+#ACE8 (exposure to mentally ill), ACE7 (victim of violence).
+DO_1b2 <- DO_1b[complete.cases(DO_1b[ , c("FIPSST", "SC_AGE_YEARS", "SC_HISPANIC_R", "SC_RACE_R", 
+                                          "SC_SEX", "BMICLASS2", "PHYSACTIV", "SCREENTIME", "HOURSLEEP", 
+                                          "K2Q32A", "K2Q33A", "ACE1", "ACE3", "ACE4", "ACE6", "ACE9", 
+                                          "ACE10", "A1_BORN", "A1_PHYSHEALTH", "BIRTHWT", "BULLIED_R", 
+                                          "CURRCOV", "FPL_I1", "HIGRADE_TVIS", "K10Q11", "K10Q22", 
+                                          "K10Q40_R", "K7Q30")]), ] #change vars as needed, n=18692
+DO_1b2_RF <- DO_1b2 %>% 
+  select(FIPSST, SC_AGE_YEARS, SC_HISPANIC_R, SC_RACE_R, SC_SEX, BMICLASS2, PHYSACTIV, SCREENTIME, 
+         HOURSLEEP, K2Q32A, K2Q33A, ACE1, ACE3, ACE4, ACE6, ACE9, ACE10, A1_BORN, A1_PHYSHEALTH, 
+         BIRTHWT, BULLIED_R, CURRCOV, FPL_I1, HIGRADE_TVIS, K10Q11, K10Q22, K10Q40_R, K7Q30)
+na.exclude(DO_1b2_RF)
+
+DO_1b3_RF <- rename(DO_1b2_RF, "State"="FIPSST", "Age"="SC_AGE_YEARS", "Hispanic_Identity"="SC_HISPANIC_R","Racial_Identity"="SC_RACE_R","Sex"="SC_SEX","BMI_Classification"="BMICLASS2","Physical_Activity_Level"="PHYSACTIV","Screentime"="SCREENTIME","Hours_Sleeping"="HOURSLEEP","Depression"="K2Q32A","Anxiety"="K2Q33A","Food_Insecurity"="ACE1","Parental_Divorce"="ACE3","Parental_Death"="ACE4","Domestic_Violence_Witnessed"="ACE6","Drug_or_Alcohol_Abuse"="ACE9","Racial_Discrimination"="ACE10","Parent_Immigration_Status"="A1_BORN","Parent_Physical_Health"="A1_PHYSHEALTH","Birth_Weight"="BIRTHWT","Bullied_Status"="BULLIED_R","Healthcare_Coverage"="CURRCOV","Family_Poverty_Ratio"="FPL_I1","Parent_Education_Level"="HIGRADE_TVIS","Neighborhood_Walkability"="K10Q11","Rundown_Housing"="K10Q22","Neighborhood_Safety"="K10Q40_R","Sports_Involvement"="K7Q30") #for better variable interpretation
+
+set.seed(2022)
+# Make testing and training data sets
+Train_2 <- sample(nrow(DO_1b3_RF), 0.8*nrow(DO_1b3_RF),replace=FALSE)
+TrainSet_2 <- DO_1b3_RF[Train_2,]
+TestSet_2 <- DO_1b3_RF[-Train_2,]
+
+# Run random forest model
+DO1b_RF5 <- randomForest(formula = BMI_Classification ~ ., data = TrainSet_2, importance=TRUE, na.action = na.roughfix, ntree = 500, mtry = 5, keep.forest=TRUE)
+DO1b_RF5 #yields a confusion matrix with variables factorized
+
+# Variable importance plot 
+IncNodePur = DO1b_RF5$importance[1:10] #subset of vars shown
+names = rownames(DO1b_RF5$importance)
+Imp = as.data.frame(cbind(names, IncNodePur))
+Imp$IncNodePur = as.numeric(as.character(Imp$IncNodePur))
+# Rearrange variables by order of importance
+Imp$names = factor(Imp$names, levels = Imp$names[order(Imp$IncNodePur)])
+Imp = Imp[order(-IncNodePur),]
+
+p <- ggplot(Imp, aes(IncNodePur, names)) +
+  geom_point(size = 4, shape = 16, col = "turquoise") +
+  # xlim(3000, 1500000) + 
+  ylab("Predictor") + 
+  labs(title = "Variable Importance Plot for Obesity Predictions with Psychoecological Variables") + xlab("Variable Importance") +
+  theme_minimal() + theme(plot.title = element_text(hjust = 0.5)) + 
+  theme(axis.text = element_text(size = 12),
+        axis.title = element_text(size = 12, face = "bold")) + scale_y_discrete(labels=c("State"="State/Location","Age"="Age (in Years)","Hispanic_Identity"="Hispanic Identity","Racial_Identity"="Race/Ethnicity","Sex"="Sex","Physical_Activity_Level"="Physical Activity Level","Screentime"="Screentime","Hours_Sleeping"="Hours Sleeping per Night","Depression"="Depressive Symptoms","Anxiety"="Anxiety Symptoms")) + theme(plot.title = element_text(face = "bold")) + theme(plot.title = element_text(hjust = 0.5))
+p
+
+# Pull predictive accuracy
+predTrain_2 <- predict(DO1b_RF5, TrainSet_2, type = "class")
+predTest_2 <- predict(DO1b_RF5, TestSet_2, type = "class")
+PredictiveAccTr_2 <- mean(predTrain_2 == TrainSet_2$BMICLASS2);PredictiveAccTr_2
+PredictiveAccTe_2 <- mean(predTest_2 == TestSet_2$BMICLASS2);PredictiveAccTe_2
+
+#State/FIPSST Partial Dependence Plot on Obese Classification
+pdp <- partialPlot(DO1b_RF5, as.data.frame(TrainSet_2), State, which.class = ">95th perc",ylab="Influence on Obese Classification", main="Partial Dependence on Child Location (State) for Obesity Risk", las=2, xlab="", cex.lab=0.8, cex.axis=0.8)
+pdp
+```
+
+## V: Random Forest Model w/o State with insightful plots produced.
+``` {r, message=FALSE, warning=FALSE, echo=TRUE}
+#RANDOM FOREST MODEL 2: NTREE=500, MTRY=5, FIPSST REMOVED
+DO_1b2a <- DO_1b[complete.cases(DO_1b[ , c("SC_AGE_YEARS", "SC_HISPANIC_R", "SC_RACE_R", 
+                                          "SC_SEX", "BMICLASS2", "PHYSACTIV", "SCREENTIME", "HOURSLEEP", 
+                                          "K2Q32A", "K2Q33A", "ACE1", "ACE3", "ACE4", "ACE6", "ACE9", 
+                                          "ACE10", "A1_BORN", "A1_PHYSHEALTH", "BIRTHWT", "BULLIED_R", 
+                                          "CURRCOV", "FPL_I1", "HIGRADE_TVIS", "K10Q11", "K10Q22", 
+                                          "K10Q40_R", "K7Q30")]), ] #change vars as needed, n=18692
+DO_1b3_RF <- DO_1b2a %>% 
+  select(SC_AGE_YEARS, SC_HISPANIC_R, SC_RACE_R, SC_SEX, BMICLASS2, PHYSACTIV, SCREENTIME, 
+         HOURSLEEP, K2Q32A, K2Q33A, ACE1, ACE3, ACE4, ACE6, ACE9, ACE10, A1_BORN, A1_PHYSHEALTH, 
+         BIRTHWT, BULLIED_R, CURRCOV, FPL_I1, HIGRADE_TVIS, K10Q11, K10Q22, K10Q40_R, K7Q30)
+na.exclude(DO_1b3_RF)
+
+DO_1b4_RF <- rename(DO_1b3_RF, "Age"="SC_AGE_YEARS", "Hispanic_Identity"="SC_HISPANIC_R","Racial_Identity"="SC_RACE_R","Sex"="SC_SEX","BMI_Classification"="BMICLASS2","Physical_Activity_Level"="PHYSACTIV","Screentime"="SCREENTIME","Hours_Sleeping"="HOURSLEEP","Depression"="K2Q32A","Anxiety"="K2Q33A","Food_Insecurity"="ACE1","Parental_Divorce"="ACE3","Parental_Death"="ACE4","Domestic_Violence_Witnessed"="ACE6","Drug_or_Alcohol_Abuse"="ACE9","Racial_Discrimination"="ACE10","Parent_Immigration_Status"="A1_BORN","Parent_Physical_Health"="A1_PHYSHEALTH","Birth_Weight"="BIRTHWT","Bullied_Status"="BULLIED_R","Healthcare_Coverage"="CURRCOV","Family_Poverty_Ratio"="FPL_I1","Parent_Education_Level"="HIGRADE_TVIS","Neighborhood_Walkability"="K10Q11","Rundown_Housing"="K10Q22","Neighborhood_Safety"="K10Q40_R","Sports_Involvement"="K7Q30") #for better variable interpretation
+
+set.seed(2022)
+# Make testing and training data sets
+Train_2a <- sample(nrow(DO_1b4_RF), 0.8*nrow(DO_1b4_RF),replace=FALSE)
+TrainSet_2a <- DO_1b4_RF[Train_2a,]
+TestSet_2a <- DO_1b4_RF[-Train_2a,]
+
+# Run random forest model
+DO1b_RF5a <- randomForest(formula = BMI_Classification ~ ., data = TrainSet_2a, importance=TRUE, na.action = na.roughfix, ntree = 500, mtry = 5, keep.forest=TRUE)
+DO1b_RF5a #yields a confusion matrix with variables factorized
+
+# Pull predictive accuracy
+predTrain_2a <- predict(DO1b_RF5a, TrainSet_2a, type = "class")
+predTest_2a <- predict(DO1b_RF5a, TestSet_2a, type = "class")
+PredictiveAccTr_2a <- mean(predTrain_2a == TrainSet_2a$BMI_Classification);PredictiveAccTr_2a
+PredictiveAccTe_2a <- mean(predTest_2a == TestSet_2a$BMI_Classification);PredictiveAccTe_2a
+
+# Variable importance plot 
+IncNodePur = DO1b_RF5a$importance[1:10] #subset of vars shown
+names = rownames(DO1b_RF5a$importance)
+Imp = as.data.frame(cbind(names, IncNodePur))
+Imp$IncNodePur = as.numeric(as.character(Imp$IncNodePur))
+# Rearrange variables by order of importance
+Imp$names = factor(Imp$names, levels = Imp$names[order(Imp$IncNodePur)])
+Imp = Imp[order(-IncNodePur),]
+
+p <- ggplot(Imp, aes(IncNodePur, names)) +
+  geom_point(size = 4, shape = 16, col = "turquoise") +
+  # xlim(3000, 1500000) + 
+  ylab("Predictor") + 
+  labs(title = "Variable Importance Plot for Obesity Predictions with Psychoecological Variables") + xlab("Variable Importance") +
+  theme_minimal() + theme(plot.title = element_text(hjust = 0.5)) + 
+  theme(axis.text = element_text(size = 12),
+        axis.title = element_text(size = 12, face = "bold")) + scale_y_discrete(labels=c("Age"="Age (in Years)","Hispanic_Identity"="Hispanic Identity","Racial_Identity"="Race/Ethnicity","Sex"="Sex","Physical_Activity_Level"="Physical Activity Level","Screentime"="Screentime","Hours_Sleeping"="Hours Sleeping per Night","Depression"="Depressive Symptoms","Anxiety"="Anxiety Symptoms","Food_Insecurity"="Food Insecurity")) + theme(plot.title = element_text(face = "bold")) + theme(plot.title = element_text(hjust = 0.5))
+p
+
+#PARTIAL DEPENDENCE PLOTS FOR REMAINING VARIABLES
+#SC_AGE_YEARS Partial Dependence Plot on Obese Classification
+partialPlot(DO1b_RF5a, as.data.frame(TrainSet_2a), Age, which.class = ">95th perc",ylab="Influence on Obese Classification", main="Partial Dependence on Child Age (in Years) for Obesity Risk", las=1)
+
+#SC_HISPANIC_R Partial Dependence Plot on Obese Classification
+partialPlot(DO1b_RF5a, as.data.frame(TrainSet_2a), Hispanic_Identity, which.class = ">95th perc",ylab="Influence on Obese Classification", main="Partial Dependence on Hispanic Race for Obesity Risk", las=1)
+
+#SC_RACE_R Partial Dependence Plot on Obese Classification
+partialPlot(DO1b_RF5a, as.data.frame(TrainSet_2a), Racial_Identity, which.class = ">95th perc",ylab="Influence on Obese Classification", main="Partial Dependence on Race/Ethnicity for Obesity Risk", xlab="",las=2)
+
+#SC_SEX Partial Dependence Plot on Obese Classification
+partialPlot(DO1b_RF5a, as.data.frame(TrainSet_2a), Sex, which.class = ">95th perc",ylab="Influence on Obese Classification", main="Partial Dependence on Sex of Child for Obesity Risk", las=1, xlab="")
+
+#PHYSACTIV Partial Dependence Plot on Obese Classification
+partialPlot(DO1b_RF5a, as.data.frame(TrainSet_2a), Physical_Activity_Level, which.class = ">95th perc",ylab="Influence on Obese Classification", main="Partial Dependence on Physical Activity Level for Obesity Risk", las=1, xlab="")
+
+#SCREENTIME Partial Dependence Plot on Obese Classification
+partialPlot(DO1b_RF5a, as.data.frame(TrainSet_2a), Screentime, which.class = ">95th perc",ylab="Influence on Obese Classification", main="Partial Dependence on Screentime for Obesity Risk", las=1, xlab="")
+
+#HOURSLEEP Partial Dependence Plot on Obese Classification
+partialPlot(DO1b_RF5a, as.data.frame(TrainSet_2a), Hours_Sleeping, which.class = ">95th perc",ylab="Influence on Obese Classification", main="Partial Dependence on Hours Slept for Obesity Risk", las=1, xlab="")
+
+#K2Q32A Partial Dependence Plot on Obese Classification
+partialPlot(DO1b_RF5a, as.data.frame(TrainSet_2a), Depression, which.class = ">95th perc",ylab="Influence on Obese Classification", xlab="Depression Symptoms",main="Partial Dependence on Depression Status for Obesity Risk", las=1)
+
+#K2Q33A Partial Dependence Plot on Obese Classification
+partialPlot(DO1b_RF5a, as.data.frame(TrainSet_2a), Anxiety, which.class = ">95th perc",ylab="Influence on Obese Classification", xlab="Anxiety Symptoms",main="Partial Dependence on Anxiety Disorder Status for Obesity Risk", las=1)
+
+#ACE1 Partial Dependence Plot on Obese Classification
+partialPlot(DO1b_RF5a, as.data.frame(TrainSet_2a), Food_Insecurity, which.class = ">95th perc",ylab="Influence on Obese Classification", xlab="Food Insecurity Frequency",main="Partial Dependence on Food Insecurity for Obesity Risk", las=1)
+
+#ACE3 Partial Dependence Plot on Obese Classification
+partialPlot(DO1b_RF5a, as.data.frame(TrainSet_2a), Parental_Divorce, which.class = ">95th perc",ylab="Influence on Obese Classification", xlab="Parental Divorce", main="Partial Dependence on Parent Divorce for Obesity Risk", las=1)
+
+#ACE4 Partial Dependence Plot on Obese Classification
+partialPlot(DO1b_RF5a, as.data.frame(TrainSet_2a), Parental_Death, which.class = ">95th perc",ylab="Influence on Obese Classification", xlab="Parental Death",main="Partial Dependence on Parental Death for Obesity Risk", las=1)
+
+#ACE6 Partial Dependence Plot on Obese Classification
+partialPlot(DO1b_RF5a, as.data.frame(TrainSet_2a), Domestic_Violence_Witnessed, which.class = ">95th perc",ylab="Influence on Obese Classification", xlab="Domestic Violence Experienced",main="Partial Dependence on Domestic Violence Experienced for Obesity Risk", las=1)
+
+#ACE9 Partial Dependence Plot on Obese Classification
+partialPlot(DO1b_RF5a, as.data.frame(TrainSet_2a), Drug_or_Alcohol_Abuse, which.class = ">95th perc",ylab="Influence on Obese Classification", main="Partial Dependence on Experience Substance Abuse for Obesity Risk", las=1)
+
+#ACE10 Partial Dependence Plot on Obese Classification
+partialPlot(DO1b_RF5a, as.data.frame(TrainSet_2a), Racial_Discrimination, which.class = ">95th perc",ylab="Influence on Obese Classification", main="Partial Dependence on Racial Discrimination for Obesity Risk", las=1)
+
+#A1_BORN Partial Dependence Plot on Obese Classification
+partialPlot(DO1b_RF5a, as.data.frame(TrainSet_2a), Parent_Immigration_Status, which.class = ">95th perc",ylab="Influence on Obese Classification", xlab="Foreign-Born Parent", main="Partial Dependence on Parent Immigration Status for Obesity Risk", las=1)
+
+#A1_PHYSHEALTH Partial Dependence Plot on Obese Classification
+partialPlot(DO1b_RF5a, as.data.frame(TrainSet_2a), Parent_Physical_Health, which.class = ">95th perc",ylab="Influence on Obese Classification", xlab="Parent Physical Health Status", main="Partial Dependence on Parent Physical Health Status for Obesity Risk", las=1)
+
+#BIRTHWT Partial Dependence Plot on Obese Classification
+partialPlot(DO1b_RF5a, as.data.frame(TrainSet_2a), Birth_Weight, which.class = ">95th perc",ylab="Influence on Obese Classification", main="Partial Dependence on Child Birth Weight for Obesity Risk", las=1)
+
+#BULLIED_R Partial Dependence Plot on Obese Classification
+partialPlot(DO1b_RF5a, as.data.frame(TrainSet_2a), Bullied_Status, which.class = ">95th perc",ylab="Influence on Obese Classification", xlab="Child Being Bullied", main="Partial Dependence on Bullied Status for Obesity Risk", las=1)
+
+#CURRCOV Partial Dependence Plot on Obese Classification
+partialPlot(DO1b_RF5a, as.data.frame(TrainSet_2a), Healthcare_Coverage, which.class = ">95th perc",ylab="Influence on Obese Classification", xlab="Healthcare Coverage", main="Partial Dependence on Current Healthcare Coverage for Obesity Risk", las=1)
+
+#FPL_I1 Partial Dependence Plot on Obese Classification
+partialPlot(DO1b_RF5a, as.data.frame(TrainSet_2a), Family_Poverty_Ratio, which.class = ">95th perc",ylab="Influence on Obese Classification", main="Partial Dependence on Family-Poverty Ratio for Obesity Risk", las=2, xlab="")
+
+#HIGRADE_TVIS Partial Dependence Plot on Obese Classification
+partialPlot(DO1b_RF5a, as.data.frame(TrainSet_2a), Parent_Education_Level, which.class = ">95th perc",ylab="Influence on Obese Classification", xlab="Parent Education Level", main="Partial Dependence on Parental Education Level for Obesity Risk", las=1)
+
+#K10Q11 Partial Dependence Plot on Obese Classification
+partialPlot(DO1b_RF5a, as.data.frame(TrainSet_2a), Neighborhood_Walkability, which.class = ">95th perc",ylab="Influence on Obese Classification", xlab="Neighborhood Walkability", main="Partial Dependence on Neighborhood Walkability for Obesity Risk", las=1)
+
+#K10Q22 Partial Dependence Plot on Obese Classification
+partialPlot(DO1b_RF5a, as.data.frame(TrainSet_2a), Rundown_Housing, which.class = ">95th perc",ylab="Influence on Obese Classification", xlab="Deteriorating Housing Conditions", main="Partial Dependence on Neighborhood Structural Integrity for Obesity Risk", las=1)
+
+#K10Q40_R Partial Dependence Plot on Obese Classification
+partialPlot(DO1b_RF5a, as.data.frame(TrainSet_2a), Neighborhood_Safety, which.class = ">95th perc",ylab="Influence on Obese Classification", xlab="Agreement on Neighborhood Safety", main="Partial Dependence on Neighborhood Safety for Obesity Risk", las=1)
+
+#K7Q30 Partial Dependence Plot on Obese Classification
+partialPlot(DO1b_RF5a, as.data.frame(TrainSet_2a), Sports_Involvement, which.class = ">95th perc",ylab="Influence on Obese Classification", xlab="Sports Involvement", main="Partial Dependence on Sports Involvement for Obesity Risk", las=1)
+```
+
+## VI: Geospatial Distribution of Obesity
+``` {r, message=FALSE, warning=FALSE, echo=TRUE}
+#US Map Plots 
+library(usmap)
+library(ggplot2)
+library(openintro)
+library(readxl)
+library(statsr)
+library(rio)
+library(skimr)
+library(broom)
+library(RColorBrewer)
+library(scales)
+library(dplyr)
+DO_1a <- rename(DO_1b, fips = FIPSST)
+
+DO_1a_sum <- DO_1a %>% 
+  group_by(fips) %>% 
+  summarise(Prop = sum(BMICLASS == c(3,4))/n())
+
+#Map creation
+plot_usmap(data = DO_1a_sum, values = "Prop") + scale_fill_gradient(low="#FFFFB2", high="#BD0026") + labs(title = "Proportion of Obese of Children aged 13-18") + labs(subtitle = "per U.S. State") + theme(plot.title = element_text(face = "bold")) + theme(plot.title = element_text(hjust = 0.5)) + theme(plot.subtitle = element_text(hjust = 0.5)) + theme(plot.subtitle = element_text(face = "bold.italic")) + theme(panel.background = element_rect(color = "black")) + theme(legend.direction = "vertical") + theme(legend.position = "right") + labs(fill = "Proportion") + theme(legend.key.size = unit(1.2, "cm")) + guides(colour = guide_legend(title.position = "top"))
+```
