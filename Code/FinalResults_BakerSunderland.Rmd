@@ -152,65 +152,6 @@ DO_1b$ACE10 <-  factor(as.integer(DO_1b$ACE10), levels = c(1,2),
                                    labels = c("Racism Experienced", "No Racism Experienced"))
 ```
 
-## IV: Random Forest Model w/ State with insightful plots produced.
-``` {r, message=FALSE, warning=FALSE, echo=TRUE}
-#RANDOM FOREST MODEL 1, NTREE=500, MTRY=5, REDUCED VAR COUNT (any Decrease Acc <40%): 
-#removed K2Q41A (diabetes), K11Q61A (food stamp usage), ACE5 (parent incarceration), 
-#ACE8 (exposure to mentally ill), ACE7 (victim of violence).
-DO_1b2 <- DO_1b[complete.cases(DO_1b[ , c("FIPSST", "SC_AGE_YEARS", "SC_HISPANIC_R", "SC_RACE_R", 
-                                          "SC_SEX", "BMICLASS2", "PHYSACTIV", "SCREENTIME", "HOURSLEEP", 
-                                          "K2Q32A", "K2Q33A", "ACE1", "ACE3", "ACE4", "ACE6", "ACE9", 
-                                          "ACE10", "A1_BORN", "A1_PHYSHEALTH", "BIRTHWT", "BULLIED_R", 
-                                          "CURRCOV", "FPL_I1", "HIGRADE_TVIS", "K10Q11", "K10Q22", 
-                                          "K10Q40_R", "K7Q30")]), ] #change vars as needed, n=18692
-DO_1b2_RF <- DO_1b2 %>% 
-  select(FIPSST, SC_AGE_YEARS, SC_HISPANIC_R, SC_RACE_R, SC_SEX, BMICLASS2, PHYSACTIV, SCREENTIME, 
-         HOURSLEEP, K2Q32A, K2Q33A, ACE1, ACE3, ACE4, ACE6, ACE9, ACE10, A1_BORN, A1_PHYSHEALTH, 
-         BIRTHWT, BULLIED_R, CURRCOV, FPL_I1, HIGRADE_TVIS, K10Q11, K10Q22, K10Q40_R, K7Q30)
-na.exclude(DO_1b2_RF)
-
-DO_1b3_RF <- rename(DO_1b2_RF, "State"="FIPSST", "Age"="SC_AGE_YEARS", "Hispanic_Identity"="SC_HISPANIC_R","Racial_Identity"="SC_RACE_R","Sex"="SC_SEX","BMI_Classification"="BMICLASS2","Physical_Activity_Level"="PHYSACTIV","Screentime"="SCREENTIME","Hours_Sleeping"="HOURSLEEP","Depression"="K2Q32A","Anxiety"="K2Q33A","Food_Insecurity"="ACE1","Parental_Divorce"="ACE3","Parental_Death"="ACE4","Domestic_Violence_Witnessed"="ACE6","Drug_or_Alcohol_Abuse"="ACE9","Racial_Discrimination"="ACE10","Parent_Immigration_Status"="A1_BORN","Parent_Physical_Health"="A1_PHYSHEALTH","Birth_Weight"="BIRTHWT","Bullied_Status"="BULLIED_R","Healthcare_Coverage"="CURRCOV","Family_Poverty_Ratio"="FPL_I1","Parent_Education_Level"="HIGRADE_TVIS","Neighborhood_Walkability"="K10Q11","Rundown_Housing"="K10Q22","Neighborhood_Safety"="K10Q40_R","Sports_Involvement"="K7Q30") #for better variable interpretation
-
-set.seed(2022)
-# Make testing and training data sets
-Train_2 <- sample(nrow(DO_1b3_RF), 0.8*nrow(DO_1b3_RF),replace=FALSE)
-TrainSet_2 <- DO_1b3_RF[Train_2,]
-TestSet_2 <- DO_1b3_RF[-Train_2,]
-
-# Run random forest model
-DO1b_RF5 <- randomForest(formula = BMI_Classification ~ ., data = TrainSet_2, importance=TRUE, na.action = na.roughfix, ntree = 500, mtry = 5, keep.forest=TRUE)
-DO1b_RF5 #yields a confusion matrix with variables factorized
-
-# Variable importance plot 
-IncNodePur = DO1b_RF5$importance[1:10] #subset of vars shown
-names = rownames(DO1b_RF5$importance)
-Imp = as.data.frame(cbind(names, IncNodePur))
-Imp$IncNodePur = as.numeric(as.character(Imp$IncNodePur))
-# Rearrange variables by order of importance
-Imp$names = factor(Imp$names, levels = Imp$names[order(Imp$IncNodePur)])
-Imp = Imp[order(-IncNodePur),]
-
-p <- ggplot(Imp, aes(IncNodePur, names)) +
-  geom_point(size = 4, shape = 16, col = "turquoise") +
-  # xlim(3000, 1500000) + 
-  ylab("Predictor") + 
-  labs(title = "Variable Importance Plot for Obesity Predictions with Psychoecological Variables") + xlab("Variable Importance") +
-  theme_minimal() + theme(plot.title = element_text(hjust = 0.5)) + 
-  theme(axis.text = element_text(size = 12),
-        axis.title = element_text(size = 12, face = "bold")) + scale_y_discrete(labels=c("State"="State/Location","Age"="Age (in Years)","Hispanic_Identity"="Hispanic Identity","Racial_Identity"="Race/Ethnicity","Sex"="Sex","Physical_Activity_Level"="Physical Activity Level","Screentime"="Screentime","Hours_Sleeping"="Hours Sleeping per Night","Depression"="Depressive Symptoms","Anxiety"="Anxiety Symptoms")) + theme(plot.title = element_text(face = "bold")) + theme(plot.title = element_text(hjust = 0.5))
-p
-
-# Pull predictive accuracy
-predTrain_2 <- predict(DO1b_RF5, TrainSet_2, type = "class")
-predTest_2 <- predict(DO1b_RF5, TestSet_2, type = "class")
-PredictiveAccTr_2 <- mean(predTrain_2 == TrainSet_2$BMICLASS2);PredictiveAccTr_2
-PredictiveAccTe_2 <- mean(predTest_2 == TestSet_2$BMICLASS2);PredictiveAccTe_2
-
-#State/FIPSST Partial Dependence Plot on Obese Classification
-pdp <- partialPlot(DO1b_RF5, as.data.frame(TrainSet_2), State, which.class = ">95th perc",ylab="Influence on Obese Classification", main="Partial Dependence on Child Location (State) for Obesity Risk", las=2, xlab="", cex.lab=0.8, cex.axis=0.8)
-pdp
-```
-
 ## V: Random Forest Model w/o State with insightful plots produced.
 ``` {r, message=FALSE, warning=FALSE, echo=TRUE}
 #RANDOM FOREST MODEL 2: NTREE=500, MTRY=5, FIPSST REMOVED
@@ -220,13 +161,14 @@ DO_1b2a <- DO_1b[complete.cases(DO_1b[ , c("SC_AGE_YEARS", "SC_HISPANIC_R", "SC_
                                           "ACE10", "A1_BORN", "A1_PHYSHEALTH", "BIRTHWT", "BULLIED_R", 
                                           "CURRCOV", "FPL_I1", "HIGRADE_TVIS", "K10Q11", "K10Q22", 
                                           "K10Q40_R", "K7Q30")]), ] #change vars as needed, n=18692
+library(dplyr)
 DO_1b3_RF <- DO_1b2a %>% 
   select(SC_AGE_YEARS, SC_HISPANIC_R, SC_RACE_R, SC_SEX, BMICLASS2, PHYSACTIV, SCREENTIME, 
          HOURSLEEP, K2Q32A, K2Q33A, ACE1, ACE3, ACE4, ACE6, ACE9, ACE10, A1_BORN, A1_PHYSHEALTH, 
          BIRTHWT, BULLIED_R, CURRCOV, FPL_I1, HIGRADE_TVIS, K10Q11, K10Q22, K10Q40_R, K7Q30)
 na.exclude(DO_1b3_RF)
 
-DO_1b4_RF <- rename(DO_1b3_RF, "Age"="SC_AGE_YEARS", "Hispanic_Identity"="SC_HISPANIC_R","Racial_Identity"="SC_RACE_R","Sex"="SC_SEX","BMI_Classification"="BMICLASS2","Physical_Activity_Level"="PHYSACTIV","Screentime"="SCREENTIME","Hours_Sleeping"="HOURSLEEP","Depression"="K2Q32A","Anxiety"="K2Q33A","Food_Insecurity"="ACE1","Parental_Divorce"="ACE3","Parental_Death"="ACE4","Domestic_Violence_Witnessed"="ACE6","Drug_or_Alcohol_Abuse"="ACE9","Racial_Discrimination"="ACE10","Parent_Immigration_Status"="A1_BORN","Parent_Physical_Health"="A1_PHYSHEALTH","Birth_Weight"="BIRTHWT","Bullied_Status"="BULLIED_R","Healthcare_Coverage"="CURRCOV","Family_Poverty_Ratio"="FPL_I1","Parent_Education_Level"="HIGRADE_TVIS","Neighborhood_Walkability"="K10Q11","Rundown_Housing"="K10Q22","Neighborhood_Safety"="K10Q40_R","Sports_Involvement"="K7Q30") #for better variable interpretation
+#DO_1b4_RF <- rename(DO_1b3_RF, c("Age"="SC_AGE_YEARS", "Hispanic_Identity"="SC_HISPANIC_R","Racial_Identity"="SC_RACE_R","Sex"="SC_SEX","BMI_Classification"="BMICLASS2","Physical_Activity_Level"="PHYSACTIV","Screentime"="SCREENTIME","Hours_Sleeping"="HOURSLEEP","Depression"="K2Q32A","Anxiety"="K2Q33A","Food_Insecurity"="ACE1","Parental_Divorce"="ACE3","Parental_Death"="ACE4","Domestic_Violence_Witnessed"="ACE6","Drug_or_Alcohol_Abuse"="ACE9","Racial_Discrimination"="ACE10","Parent_Immigration_Status"="A1_BORN","Parent_Physical_Health"="A1_PHYSHEALTH","Birth_Weight"="BIRTHWT","Bullied_Status"="BULLIED_R","Healthcare_Coverage"="CURRCOV","Family_Poverty_Ratio"="FPL_I1","Parent_Education_Level"="HIGRADE_TVIS","Neighborhood_Walkability"="K10Q11","Rundown_Housing"="K10Q22","Neighborhood_Safety"="K10Q40_R","Sports_Involvement"="K7Q30")) #for better variable interpretation
 
 set.seed(2022)
 # Make testing and training data sets
@@ -235,7 +177,7 @@ TrainSet_2a <- DO_1b4_RF[Train_2a,]
 TestSet_2a <- DO_1b4_RF[-Train_2a,]
 
 # Run random forest model
-DO1b_RF5a <- randomForest(formula = BMI_Classification ~ ., data = TrainSet_2a, importance=TRUE, na.action = na.roughfix, ntree = 500, mtry = 5, keep.forest=TRUE)
+DO1b_RF5a <- randomForest(formula = BMICLASS2 ~ ., data = TrainSet_2a, importance=TRUE, na.action = na.roughfix, ntree = 500, mtry = 5, keep.forest=TRUE)
 DO1b_RF5a #yields a confusion matrix with variables factorized
 
 # Pull predictive accuracy
