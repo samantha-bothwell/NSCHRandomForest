@@ -286,6 +286,17 @@ partialPlot(DO1b_RF5a, as.data.frame(TrainSet_2a), K10Q40_R, which.class = ">=85
 partialPlot(DO1b_RF5a, as.data.frame(TrainSet_2a), K7Q30, which.class = ">=85th perc",ylab="Influence on Obese Classification", xlab="Sports Involvement", main="Partial Dependence on Sports Involvement for Obesity Risk", las=1)
 ```
 
+# Create summary table
+```{r}
+library(vtable)
+sumtable(DO1b_RF5a)
+
+##### FINISH THIS PART ######
+
+
+
+```
+
 ## VI: Geospatial Distribution of Obesity
 ``` {r, message=FALSE, warning=FALSE, echo=TRUE}
 #US Map Plots 
